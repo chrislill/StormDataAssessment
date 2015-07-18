@@ -1,0 +1,43 @@
+---
+title: "Storm Data Assignment"
+author: "Chris Lill"
+date: "18 July 2015"
+output: html_document
+---
+
+## Synopsis
+
+
+
+## Data Processing
+
+```{r Download, cache = TRUE}
+storm.url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(storm.url, "StormData.csv.bz2")
+storm.data <- read.table("StormData.csv.bz2", header = TRUE, sep = ",")
+```
+
+To quantify the effect on population health (`people`) we will add the number of fatalities and injuries.
+```{r Processing, cache = TRUE}
+suppressMessages(library(dplyr))
+storm.summary <- storm.data %>%
+    group_by(EVTYPE) %>%
+    summarize(Population.impacted = sum(FATALITIES + INJURIES), 
+              Fatalities = sum(FATALITIES),
+              Injuries = sum(INJURIES)) %>%
+    arrange(desc(Population.impacted))
+```
+
+
+## Results
+The 20 types of events which are most 
+
+```{r PeopleTable, results="asis"}
+library(xtable)
+xt <- xtable(storm.summary[1:20,], 
+             digits = 0,
+             caption = "Types of events with greatest impact on population health")
+print(xt, type="html")
+```
+
+More text here
