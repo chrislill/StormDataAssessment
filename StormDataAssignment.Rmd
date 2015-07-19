@@ -53,30 +53,108 @@ storm.summary <- storm.data %>%
               property = sum(property),
               crop = sum(crop),
               cost = sum(property + crop))
+```
+
+There are 985 distinct values of event type in the data. According to section 2.1.1 of the Storm Data Documentation there are only 48 permitted events. Rationalize this using a regular expression for each permitted events. This does not need to be perfect, as long as it rationalizes the results to give a unique set of values for the top 10 results. Existing strings will be retained for any items that do not match.
+
+First, define the regex for each event.
+
+```{r EventRegex, cache = TRUE}
+matrix.events <- matrix(c("Avalanche", "avalanche",
+                          "Blizzard", "blizzard",
+                          "Coastal Flood", "coastal",
+                          "Cold/Windhill", "cold",
+                          "Debris Flow", "debris|flow",
+                          "Dense Fog", "fog",
+                          "Dense Smoke", "smoke",
+                          "Drought", "drought",
+                          "Dust Devil", "devil",
+                          "Dust Storm", "dust(.*)storm",
+                          "Excessive Heat", "excessive(.*)heat",
+                          "Extremeold/Windhill", "extremeold",
+                          "Flash Flood", "flash",
+                          "Flood", "(^|urban |major )flood$",
+                          "Frost/Freeze", "frost|freeze",
+                          "Funnelloud", "funnelloud",
+                          "Freezing Fog", "freezing(.*)fog",
+                          "Hail", "hail",
+                          "Heat", "^heat",
+                          "Heavy Rain", "rain",
+                          "Heavy Snow", "heavy(.*)snow",
+                          "High Surf", "surf",
+                          "High Wind", "high(.*)wind",
+                          "Hurricane (Typhoon)", "hurricane|typhoon",
+                          "Ice Storm", "ice(.*)storm",
+                          "Lake-Effect Snow", "lake(.*)effect",
+                          "Lakeshore Flood", "lakeshore(.*)flood",
+                          "Lightning", "lightning",
+                          "Marine Hail", "marine(.*)hail",
+                          "Marine High Wind", "marine(.*)high(.*)wind",
+                          "Marine Strong Wind", "marine(.*)strong(.*)wind",
+                          "Marine Thunderstorm Wind", "marine(.*)thunderstorm(.*)wind",
+                          "Rip Current", "rip(.*)current",
+                          "Seiche", "seiche",
+                          "Sleet", "sleet",
+                          "Storm Surge/Tide", "surge|tide",
+                          "Strong Wind", "strong(.*)wind",
+                          "Thunderstorm Wind", "thunderstorm|tstm",
+                          "Tornado", "tornado",
+                          "Tropical Depression", "depression",
+                          "Tropical Storm", "tropical(.*)storm",
+                          "Tsunami", "tsunami",
+                          "Volcanic Ash", "volcanic|ash",
+                          "Waterspout", "waterspout",
+                          "Wildfire", "wild(.*)fire",
+                          "Winter Storm", "winter(.*)storm",
+                          "Winter Weather", "winter(.*)weather",
+                          "Other","(.*)"),
+                        ncol = 2,
+                        byrow = TRUE)
+permitted.events <- data.frame(matrix.events)
+names(permitted.events) <- c("name", "regex")
+```
+
+The `rationalize.event` function will loop through these values to find a match. This can then be applied to all 984 events, and the results summarized.
+
+```{r EventReplacement, cache = TRUE}
+event.count <- nrow(permitted.events)
+rationalize.event <- function(x){
+    for(i in 1:event.count){
+        ifelse(grepl(permitted.events$regex[i], x, ignore.case = TRUE),
+               return(permitted.events$name[i]),
+               NA)
+    }
+}
+storm.summary$event <- factor(sapply(storm.summary$EVTYPE, rationalize.event))
+
+storm.summary <- storm.summary %>%
+    group_by(event) %>%
+    summarize(people = sum(people), 
+              fatalities = sum(fatalities),
+              injuries = sum(injuries),
+              property = sum(property),
+              crop = sum(crop),
+              cost = sum(cost))
 storm.bypeople <- arrange(storm.summary, desc(people))
 storm.bycost <- arrange(storm.summary, desc(cost))
 ```
-
 
 ## Results
 The 20 types of events which are most 
 
 ```{r PeopleTable, results="asis"}
-library(xtable)
-xt <- xtable(storm.bypeople[1:20,1:4], 
+library(knitr)
+kable(storm.bypeople[1:10,1:4], 
              digits = 0,
              caption = "Types of events with greatest impact on population health")
-print(xt, type="html")
 ```
 
 More text here
 
 ```{r CostTable, results="asis"}
-library(xtable)
-xt <- xtable(storm.bycost[1:20,c(1, 7, 5, 6)], 
+kable(storm.bycost[1:10,c(1, 7, 5, 6)], 
              digits = 0,
              caption = "Types of events with greatest economic consequences")
-print(xt, type="html")
 ```
 
 To identify the types of events which the US should prioritize resources for, the plot below shows the top 10 event types in terms of population and economic impact. The scales are relative (and on a logarithmic scale).
@@ -89,18 +167,18 @@ max.people <- max(storm.summary$people)
 max.cost <- max(storm.summary$cost)
 storm.plot <- storm.summary %>%
     filter(people >= tenth.people | cost >= tenth.cost) %>%
-    transmute(EVTYPE, people, cost) %>%
+    transmute(event, people, cost) %>%
     mutate(people = log10(people/max.people),
            cost = log10(cost/max.cost)) %>%
     arrange(people) %>%
-    gather(type, damage, -EVTYPE)
+    gather(type, damage, -event)
 
 # Reorder the levels of the EVTYPE factor so that events are plotted in descending levels of population impact.
-storm.plot$EVTYPE <- with(storm.plot, factor(EVTYPE, unique(EVTYPE)))
+storm.plot$event <- with(storm.plot, factor(event, unique(event)))
 levels(storm.plot$type) <-  c("Population", "Economic")
 
 library(ggplot2)
-g <- ggplot(storm.plot, aes(x = EVTYPE, colour = type)) +
+g <- ggplot(storm.plot, aes(x = event, colour = type)) +
     geom_point(aes(y = damage), stat = "identity") +
     coord_flip(ylim = c(-6, 0.1)) +
     facet_wrap(~ type, ncol = 2) +
@@ -112,8 +190,4 @@ g <- ggplot(storm.plot, aes(x = EVTYPE, colour = type)) +
          x = NULL,
          y = NULL)
 g
-    
-    
-
-
 ```
