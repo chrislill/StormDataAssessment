@@ -78,3 +78,42 @@ xt <- xtable(storm.bycost[1:20,c(1, 7, 5, 6)],
              caption = "Types of events with greatest economic consequences")
 print(xt, type="html")
 ```
+
+To identify the types of events which the US should prioritize resources for, the plot below shows the top 10 event types in terms of population and economic impact. The scales are relative (and on a logarithmic scale).
+
+```{r PlotImpact}
+library(tidyr)
+tenth.people <- storm.bypeople[[10, "people"]]
+tenth.cost <- storm.bycost[[10, "cost"]]
+max.people <- max(storm.summary$people)
+max.cost <- max(storm.summary$cost)
+storm.plot <- storm.summary %>%
+    filter(people >= tenth.people | cost >= tenth.cost) %>%
+    transmute(EVTYPE, people, cost) %>%
+    mutate(people = log10(people/max.people),
+           cost = log10(cost/max.cost)) %>%
+    arrange(people) %>%
+    gather(type, damage, -EVTYPE)
+
+# Reorder the levels of the EVTYPE factor so that events are plotted in descending levels of population impact.
+storm.plot$EVTYPE <- with(storm.plot, factor(EVTYPE, unique(EVTYPE)))
+levels(storm.plot$type) <-  c("Population", "Economic")
+
+library(ggplot2)
+g <- ggplot(storm.plot, aes(x = EVTYPE, colour = type)) +
+    geom_point(aes(y = damage), stat = "identity") +
+    coord_flip(ylim = c(-6, 0.1)) +
+    facet_wrap(~ type, ncol = 2) +
+    scale_colour_brewer(type = "qual", palette = 6) +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank()) +
+    labs(title = "Relative impact of weather events across the US (logarithmic)",
+         x = NULL,
+         y = NULL)
+g
+    
+    
+
+
+```
