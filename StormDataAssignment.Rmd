@@ -17,15 +17,44 @@ download.file(storm.url, "StormData.csv.bz2")
 storm.data <- read.table("StormData.csv.bz2", header = TRUE, sep = ",")
 ```
 
-To quantify the effect on population health (`people`) we will add the number of fatalities and injuries.
-```{r Processing, cache = TRUE}
+A function is needed to interpret the `PROPDMGEXP` and `CROPDMGEXP` fields which multiply `PROPDMG` and `CROPDMG` by varying powers of 10. `damage(x, y)` calculates the actual damage of `x*(10^y)` where x is the coefficient (`PROPDMG`) and y is the exponent (`PROPDMGEXP`). 
+```{r Damage}
+damage <- function(x, y) {
+    exp <- ifelse(is.numeric(y), 
+                  y,
+                  ifelse(y %in% c("h", "H"),
+                         2,
+                         ifelse(y %in% c("k", "K"),
+                                3,
+                                ifelse(y %in% c("m", "M"),
+                                       6,
+                                       ifelse(y %in% c("b", "B"),
+                                              9,
+                                              0
+                                              )
+                                       )
+                                )
+                         )
+                  )
+    x * (10 ^ exp)
+}
+```
+
+To quantify the effect on population health (`people`) we will add the number of fatalities and injuries. To quantify the cost (`cost`) we will add the property and crop damages.
+```{r Processing}
 suppressMessages(library(dplyr))
 storm.summary <- storm.data %>%
     group_by(EVTYPE) %>%
-    summarize(Population.impacted = sum(FATALITIES + INJURIES), 
-              Fatalities = sum(FATALITIES),
-              Injuries = sum(INJURIES)) %>%
-    arrange(desc(Population.impacted))
+    mutate(property = damage(PROPDMG, PROPDMGEXP),
+           crop = damage(CROPDMG, CROPDMGEXP)) %>%
+    summarize(people = sum(FATALITIES + INJURIES), 
+              fatalities = sum(FATALITIES),
+              injuries = sum(INJURIES),
+              property = sum(property),
+              crop = sum(crop),
+              cost = sum(property + crop))
+storm.bypeople <- arrange(storm.summary, desc(people))
+storm.bycost <- arrange(storm.summary, desc(cost))
 ```
 
 
@@ -34,10 +63,18 @@ The 20 types of events which are most
 
 ```{r PeopleTable, results="asis"}
 library(xtable)
-xt <- xtable(storm.summary[1:20,], 
+xt <- xtable(storm.bypeople[1:20,1:4], 
              digits = 0,
              caption = "Types of events with greatest impact on population health")
 print(xt, type="html")
 ```
 
 More text here
+
+```{r CostTable, results="asis"}
+library(xtable)
+xt <- xtable(storm.bycost[1:20,c(1, 7, 5, 6)], 
+             digits = 0,
+             caption = "Types of events with greatest economic consequences")
+print(xt, type="html")
+```
