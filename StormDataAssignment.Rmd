@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ## Synopsis
-
+The US Storm data between 1966 and 2011 was analysed to identify the types of event that have had the greatest impact across the US. Tornadoes have had the greatest impact on the population, killing 5600 and injuring 91,000. Winter storms have had the greatest economic impact causing 130 trillion dollars of property damage. The relative impact of different types of events can be seen against a logarithmic scale at the bottom of this report. 
 
 
 ## Data Processing
@@ -17,7 +17,7 @@ download.file(storm.url, "StormData.csv.bz2")
 storm.data <- read.table("StormData.csv.bz2", header = TRUE, sep = ",")
 ```
 
-A function is needed to interpret the `PROPDMGEXP` and `CROPDMGEXP` fields which multiply `PROPDMG` and `CROPDMG` by varying powers of 10. `damage(x, y)` calculates the actual damage of `x*(10^y)` where x is the coefficient (`PROPDMG`) and y is the exponent (`PROPDMGEXP`). 
+A function is needed to interpret the `PROPDMGEXP` and `CROPDMGEXP` fields which multiply `PROPDMG` and `CROPDMG` by varying powers of 10. `damage(x, y)` calculates the actual damage of $x.10^y$ where x is the coefficient, `PROPDMG`, and y is the exponent, `PROPDMGEXP`. 
 ```{r Damage}
 damage <- function(x, y) {
     exp <- ifelse(is.numeric(y), 
@@ -114,7 +114,7 @@ permitted.events <- data.frame(matrix.events)
 names(permitted.events) <- c("name", "regex")
 ```
 
-The `rationalize.event` function will loop through these values to find a match. This can then be applied to all 984 events, and the results summarized.
+The `rationalize.event()` function will loop through these values to find a match. This can then be applied to all 985 events, and the results summarized.
 
 ```{r EventReplacement, cache = TRUE}
 event.count <- nrow(permitted.events)
@@ -135,31 +135,35 @@ storm.summary <- storm.summary %>%
               property = sum(property),
               crop = sum(crop),
               cost = sum(cost))
-storm.bypeople <- arrange(storm.summary, desc(people))
-storm.bycost <- arrange(storm.summary, desc(cost))
 ```
 
 ## Results
-The 20 types of events which are most 
+### Population impact
+The top 10 event types with the greatest impact on the population are shown in the table below. This is calculated as the sum of fatalities and injuries.
 
 ```{r PeopleTable, results="asis"}
 library(knitr)
+storm.bypeople <- arrange(storm.summary, desc(people))
 kable(storm.bypeople[1:10,1:4], 
              digits = 0,
-             caption = "Types of events with greatest impact on population health")
+             caption = "Events types with the greatest impact on the population")
 ```
 
-More text here
+### Economic impact
+The top 10 event types with the greatest economic impact are shown in the table below. This is calculated as the sum of property and crop damage.
 
 ```{r CostTable, results="asis"}
+options(scipen = 10)
+storm.bycost <- arrange(storm.summary, desc(cost))
 kable(storm.bycost[1:10,c(1, 7, 5, 6)], 
              digits = 0,
-             caption = "Types of events with greatest economic consequences")
+             caption = "Event types with the greatest economic impact")
 ```
 
-To identify the types of events which the US should prioritize resources for, the plot below shows the top 10 event types in terms of population and economic impact. The scales are relative (and on a logarithmic scale).
+### Relative impact
+To identify the types of events which the US should prioritize resources for, the plot below combines the top 10 event types in terms of population and economic impact. The scales are relative and use a logarithmic scale so that the differences between smaller values can be seen.
 
-```{r PlotImpact}
+```{r PlotData}
 library(tidyr)
 tenth.people <- storm.bypeople[[10, "people"]]
 tenth.cost <- storm.bycost[[10, "cost"]]
@@ -172,11 +176,18 @@ storm.plot <- storm.summary %>%
            cost = log10(cost/max.cost)) %>%
     arrange(people) %>%
     gather(type, damage, -event)
+```
 
-# Reorder the levels of the EVTYPE factor so that events are plotted in descending levels of population impact.
+Order the levels of the `event` factor so that events are plotted in descending levels of population impact. Also update the levels of the `type` factor so that the facet titles are meaningful.
+
+```{r PlotOrder}
 storm.plot$event <- with(storm.plot, factor(event, unique(event)))
 levels(storm.plot$type) <-  c("Population", "Economic")
+```
 
+Use a dot plot rather than a bar chart, and remove the scale to emphasise that this is a relative comparison so all values are visible on the same scale. The financial impact of Winter Storms is actually 2000 times greater than Tropical Storm, the next most expensive event type.
+
+```{r PlotCreate}
 library(ggplot2)
 g <- ggplot(storm.plot, aes(x = event, colour = type)) +
     geom_point(aes(y = damage), stat = "identity") +
